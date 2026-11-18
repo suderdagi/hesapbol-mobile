@@ -14,7 +14,7 @@ Built with React Native, Expo and TypeScript. Works fully offline; data stays on
 - Add expenses with a category and who paid
 - Split **equally** between selected people or by **exact amounts**, with live validation that shares add up to the total
 - **Balances:** who gets money back and who owes, per person
-- **Settle up:** suggested payments that clear every debt with as few transfers as possible; mark them as paid or undo
+- **Settle up:** suggested payments that clear every debt with the fewest transfers (exact for up to 16 people with an open balance); mark them as paid or undo
 - Edit and delete expenses, add people later, share a text summary through the system share sheet
 - Data is saved on the device with AsyncStorage
 
@@ -29,7 +29,7 @@ Built with React Native, Expo and TypeScript. Works fully offline; data stays on
 
 ### Money as integers
 
-All amounts are stored in kuruş (1 TL = 100 kuruş) as integers. With floating point numbers, `0.1 + 0.2` is `0.30000000000000004`, and those errors add up in balances. The user can type `12,50` or `12.50`; [`toKurus()`](src/lib/money.ts) turns both into `1250`.
+All amounts are stored in kuruş (1 TL = 100 kuruş) as integers. With floating point numbers, `0.1 + 0.2` is `0.30000000000000004`, and those errors add up in balances. The user can type `12,50`, `12.50` or `1 250,50`; [`toKurus()`](src/lib/money.ts) turns them into integers and refuses anything it can't read exactly, like `12 50` or an amount with more than 9 digits before the comma.
 
 ### Splitting without losing a kuruş
 
@@ -40,13 +40,16 @@ All amounts are stored in kuruş (1 TL = 100 kuruş) as integers. With floating 
 Paying back every expense separately can mean many small transfers. [`simplifyDebts()`](src/lib/balances.ts) works on net balances instead:
 
 1. Compute each person's balance: what they paid minus their shares, adjusted by payments already made. The balances of a group always sum to zero.
-2. Repeatedly let the person who owes the most pay the person who is owed the most, as much as possible.
+2. Split the people with an open balance into as many smaller groups as possible whose balances add up to zero on their own (two people who owe each other the same amount are the simplest case). A group of *k* people needs exactly *k − 1* payments, so more groups means fewer payments.
+3. Inside each group, let the person who owes the most pay the person who is owed the most, as much as possible, until everyone is at zero.
 
-Every step brings at least one person to zero, so a group of *n* people needs at most *n − 1* payments, no matter how many expenses there are.
+Step 2 tries every combination of people (2ⁿ steps), so it runs for up to 16 people with an open balance. A bigger group skips it and is settled as one group, which still needs at most *n − 1* payments but not always the fewest; finding the true minimum is [NP-hard](https://www.infedu.vu.lt/journal/INFEDU/article/612) in general. Using only step 3 for everyone gives 4 payments instead of 3 for balances of +20, −40, −30, +30 and +20 TL, and this case is covered by a test.
 
 ### State
 
 All changes go through a single pure [`reducer`](src/store/reducer.ts), which makes them easy to test. The provider loads groups from AsyncStorage on start and saves them shortly after changes (debounced), so the UI never waits for storage.
+
+Saved data is never overwritten blindly. If it isn't a list of groups, the text is copied to a backup key and the app starts with an empty list and a notice. If storage doesn't answer at all, nothing is saved until the app is reopened. [`loadGroups()`](src/store/persistence.ts) takes the storage as a parameter, so both cases are unit tested.
 
 ## Project structure
 
@@ -78,3 +81,7 @@ npm test
 - Sync groups between phones with a backend
 - Multiple currencies with exchange rates
 - Receipt photos
+- Remove or rename people (needs rules for people who already have expenses)
+- Choose the date of an expense; today it is the moment it was added
+- Save immediately when the app goes to the background; changes made in the last 300 ms before it is closed can be lost today
+- Test the screens; only the logic is covered by tests
