@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatMoney, toInputValue, toKurus } from './money'
 import { splitEqually, validateShares } from './split'
-import { computeBalances, simplifyDebts } from './balances'
+import { computeBalances, EXACT_LIMIT, simplifyDebts, type Transfer } from './balances'
 import type { Expense, Group } from './types'
 
 /** Small seeded random generator so the "random" tests give the same numbers on every run */
@@ -156,5 +156,94 @@ describe('simplifyDebts', () => {
 
   it('returns nothing when everyone is even', () => {
     expect(simplifyDebts(new Map([['a', 0], ['b', 0]]))).toEqual([])
+  })
+})
+
+/** Balances left after paying the given transfers; all zeros means everything is settled */
+function leftOver(balances: Map<string, number>, transfers: Transfer[]) {
+  const after = new Map(balances)
+  for (const t of transfers) {
+    after.set(t.from, after.get(t.from)! + t.amount)
+    after.set(t.to, after.get(t.to)! - t.amount)
+  }
+  return [...after.values()]
+}
+
+/**
+ * Reference answer by brute force: the fewest payments equal the number of people minus the most
+ * groups that add up to zero, found here by trying every subset.
+ */
+function fewestPayments(values: number[]): number {
+  const sum = (mask: number) => values.reduce((s, v, i) => (mask & (1 << i) ? s + v : s), 0)
+  const memo = new Map<number, number>()
+  const mostGroups = (mask: number): number => {
+    if (mask === 0) return 0
+    if (memo.has(mask)) return memo.get(mask)!
+    const first = mask & -mask
+    let best = 0
+    for (let sub = mask; sub > 0; sub = (sub - 1) & mask) {
+      if (sub & first && sum(sub) === 0) best = Math.max(best, 1 + mostGroups(mask ^ sub))
+    }
+    memo.set(mask, best)
+    return best
+  }
+  return values.length - mostGroups((1 << values.length) - 1)
+}
+
+/** Random balances that add up to zero, none of them zero */
+function randomBalances(random: () => number, people: number, max: number): number[] {
+  for (;;) {
+    const values = Array.from({ length: people - 1 }, () => {
+      const v = Math.floor(random() * (2 * max + 1)) - max
+      return v === 0 ? 1 : v
+    })
+    const last = -values.reduce((a, b) => a + b, 0)
+    if (last !== 0) return [...values, last]
+  }
+}
+
+describe('simplifyDebts finds the fewest payments', () => {
+  // Paying the biggest debt to the biggest credit first needs 4 payments here.
+  // Deniz paying Ece, and Can paying Ayşe and Fatih, needs only 3.
+  const tricky = new Map([
+    ['ayse', 2000],
+    ['can', -4000],
+    ['deniz', -3000],
+    ['ece', 3000],
+    ['fatih', 2000],
+  ])
+
+  it('beats the plain greedy method on a tricky group', () => {
+    const transfers = simplifyDebts(tricky)
+    expect(transfers).toHaveLength(3)
+    expect(leftOver(tricky, transfers).every((v) => v === 0)).toBe(true)
+  })
+
+  it('ignores people who are already even', () => {
+    const transfers = simplifyDebts(new Map([['a', 0], ['b', 500], ['c', -500], ['d', 0]]))
+    expect(transfers).toEqual([{ from: 'c', to: 'b', amount: 500 }])
+  })
+
+  it('matches a brute-force search on random groups of up to 8 people', () => {
+    const random = seededRandom(7)
+    for (let round = 0; round < 300; round++) {
+      const values = randomBalances(random, 2 + Math.floor(random() * 7), 12)
+      const balances = new Map(values.map((v, i) => ['p' + i, v * 100]))
+      const transfers = simplifyDebts(balances)
+
+      expect(transfers).toHaveLength(fewestPayments(values))
+      expect(leftOver(balances, transfers).every((v) => v === 0)).toBe(true)
+      expect(transfers.every((t) => t.amount > 0 && t.from !== t.to)).toBe(true)
+    }
+  })
+
+  it('still settles everyone, with at most n - 1 payments, beyond the exact limit', () => {
+    const random = seededRandom(11)
+    const people = EXACT_LIMIT + 4
+    const balances = new Map(randomBalances(random, people, 500).map((v, i) => ['p' + i, v]))
+    const transfers = simplifyDebts(balances)
+
+    expect(leftOver(balances, transfers).every((v) => v === 0)).toBe(true)
+    expect(transfers.length).toBeLessThanOrEqual(people - 1)
   })
 })

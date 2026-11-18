@@ -1,9 +1,10 @@
+import { useMemo } from 'react'
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useGroup } from '@/src/store/GroupsProvider'
-import { computeBalances, simplifyDebts, type Transfer } from '@/src/lib/balances'
+import { computeBalances, EXACT_LIMIT, simplifyDebts, type Transfer } from '@/src/lib/balances'
 import { formatMoney } from '@/src/lib/money'
 import { createId } from '@/src/lib/id'
 import { Avatar, Button, Card, SectionTitle } from '@/src/components/ui'
@@ -12,10 +13,13 @@ import { colors } from '@/src/theme'
 export default function SettleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { group, dispatch } = useGroup(id)
+  const balances = useMemo(() => (group ? computeBalances(group) : new Map<string, number>()), [group])
+  const transfers = useMemo(() => simplifyDebts(balances), [balances])
   if (!group) return null
 
   const nameOf = (memberId: string) => group.members.find((m) => m.id === memberId)?.name ?? '?'
-  const transfers = simplifyDebts(computeBalances(group))
+  // Above EXACT_LIMIT people the list is short but not guaranteed to be the shortest possible
+  const isFewest = [...balances.values()].filter((b) => b !== 0).length <= EXACT_LIMIT
 
   const markPaid = (t: Transfer) => {
     Alert.alert('Mark as paid', `${nameOf(t.from)} paid ${formatMoney(t.amount)} to ${nameOf(t.to)}?`, [
@@ -44,7 +48,8 @@ export default function SettleScreen() {
       ) : (
         <>
           <Text style={styles.intro}>
-            The fewest payments that settle every debt in {group.name}. Mark a payment as paid once the money is sent.
+            {isFewest ? 'The fewest payments' : 'A short list of payments'} that settle every debt in {group.name}. Mark a payment as
+            paid once the money is sent.
           </Text>
           {transfers.map((t) => (
             <Card key={`${t.from}-${t.to}`} style={styles.transfer}>
