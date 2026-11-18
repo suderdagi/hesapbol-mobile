@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, toKurus } from './money'
+import { formatMoney, toInputValue, toKurus } from './money'
 import { splitEqually, validateShares } from './split'
 import { computeBalances, simplifyDebts } from './balances'
 import type { Expense, Group } from './types'
+
+/** Small seeded random generator so the "random" tests give the same numbers on every run */
+function seededRandom(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 const members = [
   { id: 'ayse', name: 'Ayşe' },
@@ -41,6 +51,27 @@ describe('money', () => {
 
   it('formats as Turkish lira', () => {
     expect(formatMoney(125050)).toMatch(/1\.250,50/)
+  })
+
+  it('only treats spaces as thousands separators when the groups have three digits', () => {
+    expect(toKurus('1 250,50')).toBe(125050)
+    expect(toKurus('1 250')).toBe(125000)
+    expect(toKurus('12 50')).toBeNull() // used to be read as 1250 TL
+    expect(toKurus('1 2500')).toBeNull()
+  })
+
+  it('refuses amounts too large to stay exact', () => {
+    expect(toKurus('999999999,99')).toBe(99_999_999_999)
+    expect(toKurus('1000000000')).toBeNull()
+    expect(toKurus('99999999999999999')).toBeNull()
+  })
+
+  it('reads back exactly what toInputValue wrote, for any amount up to the limit', () => {
+    const random = seededRandom(42)
+    for (let i = 0; i < 5000; i++) {
+      const kurus = Math.floor(random() * 100_000_000_000)
+      expect(toKurus(toInputValue(kurus))).toBe(kurus)
+    }
   })
 })
 

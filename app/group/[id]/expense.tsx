@@ -36,7 +36,10 @@ function ExpenseForm({ group, expenseId }: { group: Group; expenseId?: string })
     Object.fromEntries(existing?.splitType === 'exact' ? existing.shares.map((s) => [s.memberId, toInputValue(s.amount)]) : [])
   )
 
-  const amount = toKurus(amountText) ?? 0
+  const parsedAmount = toKurus(amountText)
+  const amount = parsedAmount ?? 0
+  // Without this the Save button would just stay disabled for input like "1.250,50"
+  const amountUnreadable = amountText.trim() !== '' && parsedAmount === null
 
   // Shares are derived from the inputs on every render, so the preview is always correct
   const shares: Share[] = useMemo(() => {
@@ -102,6 +105,11 @@ function ExpenseForm({ group, expenseId }: { group: Group; expenseId?: string })
           autoFocus={!existing}
         />
         <Text style={styles.currency}>TL</Text>
+        {amountUnreadable && (
+          <Text style={[styles.error, { textAlign: 'center', marginTop: -8, marginBottom: 16 }]}>
+            Type the amount with digits and one comma or dot, for example 12,50
+          </Text>
+        )}
 
         <TextInput
           style={styles.input}

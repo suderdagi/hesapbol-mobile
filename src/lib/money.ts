@@ -5,10 +5,15 @@
  */
 export type Kurus = number
 
+// 12 or 12,50 or 12.50, optionally with spaces as thousands separators ("1 250,50").
+// At most 9 digits before the decimal separator keeps every amount, and the sums of many
+// of them, far below the largest integer a number can hold exactly.
+const AMOUNT_PATTERN = /^(?:\d{1,9}|\d{1,3}(?:[  ]\d{3}){1,2})(?:[.,]\d{0,2})?$/
+
 export function toKurus(input: string): Kurus | null {
-  // Accept both "12,50" (Turkish) and "12.50"
-  const normalized = input.trim().replace(/\s/g, '').replace(',', '.')
-  if (!/^\d+(\.\d{0,2})?$/.test(normalized)) return null
+  const text = input.trim()
+  if (!AMOUNT_PATTERN.test(text)) return null
+  const normalized = text.replace(/[  ]/g, '').replace(',', '.')
   return Math.round(Number(normalized) * 100)
 }
 
