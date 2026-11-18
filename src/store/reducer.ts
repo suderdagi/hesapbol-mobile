@@ -1,7 +1,8 @@
 import type { Expense, Group, Member, Settlement } from '@/src/lib/types'
+import type { LoadError } from './persistence'
 
 export type Action =
-  | { type: 'loaded'; groups: Group[] }
+  | { type: 'loaded'; groups: Group[]; error?: LoadError | null }
   | { type: 'createGroup'; group: Group }
   | { type: 'deleteGroup'; groupId: string }
   | { type: 'addMember'; groupId: string; member: Member }
@@ -13,9 +14,11 @@ export type Action =
 export interface State {
   ready: boolean
   groups: Group[]
+  /** Set when the saved data could not be loaded normally; the screens explain it */
+  error: LoadError | null
 }
 
-export const initialState: State = { ready: false, groups: [] }
+export const initialState: State = { ready: false, groups: [], error: null }
 
 /** Pure function: easy to test and the only place where data changes */
 export function reducer(state: State, action: Action): State {
@@ -26,7 +29,7 @@ export function reducer(state: State, action: Action): State {
 
   switch (action.type) {
     case 'loaded':
-      return { ready: true, groups: action.groups }
+      return { ready: true, groups: action.groups, error: action.error ?? null }
 
     case 'createGroup':
       return { ...state, groups: [action.group, ...state.groups] }

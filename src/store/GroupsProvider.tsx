@@ -1,9 +1,7 @@
 import React, { createContext, useContext, useEffect, useReducer, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { Group } from '@/src/lib/types'
 import { initialState, reducer, type Action, type State } from './reducer'
-
-const STORAGE_KEY = 'hesapbol.groups.v1'
+import { loadGroups, STORAGE_KEY } from './persistence'
 
 const GroupsContext = createContext<{ state: State; dispatch: React.Dispatch<Action> } | null>(null)
 
@@ -16,14 +14,13 @@ export function GroupsProvider({ children }: { children: React.ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => dispatch({ type: 'loaded', groups: raw ? (JSON.parse(raw) as Group[]) : [] }))
-      .catch(() => dispatch({ type: 'loaded', groups: [] }))
+    loadGroups(AsyncStorage).then(({ groups, error }) => dispatch({ type: 'loaded', groups, error }))
   }, [])
 
   // Save shortly after changes stop, instead of writing on every keystroke-level update
   useEffect(() => {
-    if (!state.ready) return
+    // If the saved data could not be read at all, saving would replace it with an empty list
+    if (!state.ready || state.error === 'unreadable') return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state.groups)).catch(() => {})

@@ -7,27 +7,42 @@ import { formatMoney } from '@/src/lib/money'
 import { Button } from '@/src/components/ui'
 import { colors } from '@/src/theme'
 
+const LOAD_NOTICES = {
+  unreadable: 'Your saved groups could not be read, so changes are not being saved. Close and reopen the app to try again.',
+  invalid: 'The saved data was not in the expected format. A copy was kept on this device and the list starts empty.',
+} as const
+
 export default function GroupsScreen() {
   const router = useRouter()
   const { state } = useGroups()
 
   if (!state.ready) return null
 
+  const notice = state.error ? (
+    <View style={styles.notice}>
+      <Text style={styles.noticeText}>{LOAD_NOTICES[state.error]}</Text>
+    </View>
+  ) : null
+
   if (state.groups.length === 0) {
     return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyEmoji}>🧾</Text>
-        <Text style={styles.emptyTitle}>Split expenses without the math</Text>
-        <Text style={styles.emptyText}>
-          Create a group for a trip, a shared flat or a dinner. Add who paid what and HesapBöl tells everyone what they owe.
-        </Text>
-        <Button title="Create your first group" onPress={() => router.push('/new-group')} style={{ alignSelf: 'stretch' }} />
+      <View style={{ flex: 1 }}>
+        {notice}
+        <View style={styles.empty}>
+          <Text style={styles.emptyEmoji}>🧾</Text>
+          <Text style={styles.emptyTitle}>Split expenses without the math</Text>
+          <Text style={styles.emptyText}>
+            Create a group for a trip, a shared flat or a dinner. Add who paid what and HesapBöl tells everyone what they owe.
+          </Text>
+          <Button title="Create your first group" onPress={() => router.push('/new-group')} style={{ alignSelf: 'stretch' }} />
+        </View>
       </View>
     )
   }
 
   return (
     <View style={{ flex: 1 }}>
+      {notice}
       <FlatList
         data={state.groups}
         keyExtractor={(g) => g.id}
@@ -64,6 +79,8 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
+  notice: { margin: 16, marginBottom: 0, padding: 12, borderRadius: 12, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
+  noticeText: { color: '#991b1b', fontSize: 14, lineHeight: 20 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
   emptyEmoji: { fontSize: 56 },
   emptyTitle: { fontSize: 22, fontWeight: '700', color: colors.text, textAlign: 'center' },
