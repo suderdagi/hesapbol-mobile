@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useGroup } from '@/src/store/GroupsProvider'
 import { computeBalances, simplifyDebts, totalSpent } from '@/src/lib/balances'
 import { formatMoney } from '@/src/lib/money'
+import { localDayKey } from '@/src/lib/dates'
 import { createId } from '@/src/lib/id'
 import { Avatar, Button, Card, SectionTitle } from '@/src/components/ui'
 import { CATEGORY_META, colors } from '@/src/theme'
@@ -22,11 +23,12 @@ export default function GroupScreen() {
   const [newMember, setNewMember] = useState('')
 
   const balances = useMemo(() => (group ? computeBalances(group) : new Map<string, number>()), [group])
+  // Memoized because typing in the "Add someone" field re-renders this screen on every keystroke
+  const openDebts = useMemo(() => simplifyDebts(balances), [balances])
 
   if (!group) return null
 
   const nameOf = (memberId: string) => group.members.find((m) => m.id === memberId)?.name ?? '?'
-  const openDebts = simplifyDebts(balances)
 
   const shareSummary = () => {
     const lines = [`${group.emoji} ${group.name}`, `Total spent: ${formatMoney(totalSpent(group))}`, '']
@@ -59,12 +61,12 @@ export default function GroupScreen() {
     setNewMember('')
   }
 
-  // Expenses grouped by day, newest first
+  // Expenses grouped by the day they were added on this phone, newest first
   const sections = Object.entries(
     [...group.expenses]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .reduce<Record<string, typeof group.expenses>>((acc, e) => {
-        const key = e.createdAt.slice(0, 10)
+        const key = localDayKey(e.createdAt)
         ;(acc[key] ??= []).push(e)
         return acc
       }, {})
