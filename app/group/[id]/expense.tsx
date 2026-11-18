@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -55,8 +55,12 @@ function ExpenseForm({ group, expenseId }: { group: Group; expenseId?: string })
   const validation = validateShares(amount, shares)
   const canSave = description.trim().length > 0 && validation.ok
 
+  // The screen takes a moment to close; a second tap in that time must not add the expense twice
+  const saved = useRef(false)
+
   const save = () => {
-    if (!canSave) return
+    if (!canSave || saved.current) return
+    saved.current = true
     dispatch({
       type: 'saveExpense',
       groupId: group.id,
